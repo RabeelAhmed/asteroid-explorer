@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Asteroid Explorer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gradient-to-br from-[#0c0c1e] to-[#1a1a3a] text-white min-h-screen font-sans">
+    <div class="max-w-7xl mx-auto p-5">
+      <header class="text-center mb-10">
+        <h1 class="text-4xl md:text-5xl font-bold mb-2 bg-gradient-to-r from-sky-400 to-sky-600 bg-clip-text text-transparent">
+          🌌 Asteroid Explorer
+        </h1>
+        <p class="text-lg text-gray-400">Discover near-Earth asteroids and their stunning images</p>
+      </header>
+
+      <main>
+        <section class="text-center mb-10">
+          <div class="bg-white/10 p-6 rounded-2xl backdrop-blur-md inline-block">
+            <div class="flex flex-col md:flex-row gap-4 justify-center bg-black/30 p-2 rounded-xl mb-6">
+              <button class="search-type-btn active flex-1 py-3 px-6 rounded-lg text-gray-300 hover:bg-gradient-to-r from-sky-400 to-sky-600 hover:text-white transition-all" data-type="date">🗓️ Search by Date</button>
+              <button class="search-type-btn flex-1 py-3 px-6 rounded-lg text-gray-300 hover:bg-gradient-to-r from-sky-400 to-sky-600 hover:text-white transition-all" data-type="upcoming">🚀 View Upcoming Asteroids</button>
+            </div>
+
+            <div class="flex-col items-center gap-4 hidden" id="date-search">
+              <label for="date-input" class="text-sky-400 font-bold">Pick a Date to Explore:</label>
+              <input type="date" id="date-input" class="px-4 py-3 rounded-lg text-gray-900 shadow-md" />
+              <button id="search-btn" class="mt-3 bg-gradient-to-r from-sky-400 to-sky-600 text-white font-bold px-6 py-3 rounded-lg shadow-md hover:shadow-lg hover:-translate-y-1 transition">
+                Find Asteroids
+              </button>
+            </div>
+
+            <div class="flex-col items-center gap-4 hidden" id="upcoming-search">
+              <p class="text-gray-400 text-lg">Discover asteroids that are currently being tracked by NASA</p>
+              <button id="upcoming-btn" class="bg-gradient-to-r from-sky-400 to-sky-600 text-white font-bold px-6 py-3 rounded-lg shadow-md hover:shadow-lg hover:-translate-y-1 transition">
+                Show Upcoming Asteroids
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <section id="loading-section" class="text-center my-10 hidden">
+          <div class="w-12 h-12 border-4 border-white/30 border-t-sky-400 rounded-full animate-spin mx-auto mb-4"></div>
+          <p>Searching the cosmos for asteroids...</p>
+        </section>
+
+        <section id="results-section" class="hidden">
+          <h2 class="text-3xl text-sky-400 text-center mb-5">Space Rocks Found! 🌌</h2>
+          <div id="asteroid-count" class="text-center text-xl font-bold text-sky-400 mb-4"></div>
+
+          <div class="bg-sky-400/20 border border-sky-400/30 rounded-xl p-6 text-center max-w-3xl mx-auto mb-10">
+            <h3 class="text-sky-400 text-xl mb-2 font-semibold">🔍 What You're Looking At:</h3>
+            <p class="text-gray-300">These are asteroids (space rocks) that passed close to Earth. Don't worry - "close" in space terms still means they're very far away and completely safe!</p>
+          </div>
+
+          <div id="asteroids-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"></div>
+        </section>
+
+        <section id="no-results" class="hidden text-center my-10 bg-white/5 p-10 rounded-xl border-2 border-dashed border-sky-400/30">
+          <h2 class="text-2xl text-sky-400 mb-4">🌙 Empty Space</h2>
+          <p class="text-gray-400 mb-2">No asteroids were recorded close to Earth on this date. The cosmos was quiet that day!</p>
+          <p class="text-gray-400">Try picking another date - there are always space rocks flying around!</p>
+        </section>
+      </main>
+    </div>
+
+    <script>
+  const dateSearchSection = document.getElementById("date-search");
+  const upcomingSearchSection = document.getElementById("upcoming-search");
+  const asteroidContainer = document.getElementById("asteroids-container");
+  const resultsSection = document.getElementById("results-section");
+  const noResultsSection = document.getElementById("no-results");
+  const loadingSection = document.getElementById("loading-section");
+  const asteroidCount = document.getElementById("asteroid-count");
+
+  const typeButtons = document.querySelectorAll(".search-type-btn");
+
+  typeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      typeButtons.forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      if (btn.dataset.type === "date") {
+        dateSearchSection.classList.remove("hidden");
+        upcomingSearchSection.classList.add("hidden");
+        asteroidContainer.innerHTML = '';
+        resultsSection.classList.add("hidden");
+        noResultsSection.classList.add("hidden");
+      } else {
+        dateSearchSection.classList.add("hidden");
+        upcomingSearchSection.classList.remove("hidden");
+        asteroidContainer.innerHTML = '';
+        resultsSection.classList.add("hidden");
+        noResultsSection.classList.add("hidden");
+      }
+    });
+  });
+
+  document.getElementById("search-btn").addEventListener("click", async () => {
+    const date = document.getElementById("date-input").value;
+    if (!date) return alert("Please select a date");
+
+    showLoading();
+    try {
+      const res = await fetch(`/api/asteroids?date=${date}`);
+      const data = await res.json();
+      const asteroids = data.near_earth_objects[date] || [];
+      displayAsteroids(asteroids, false);
+    } catch (err) {
+      console.error(err);
+      showNoResults();
+    }
+  });
+
+  document.getElementById("upcoming-btn").addEventListener("click", async () => {
+    const today = new Date().toISOString().split("T")[0];
+
+    showLoading();
+    try {
+      const res = await fetch(`/api/browse-asteroids?date=${today}`);
+      const data = await res.json();
+      const asteroids = data.near_earth_objects || [];
+      displayAsteroids(asteroids, true);
+    } catch (err) {
+      console.error(err);
+      showNoResults();
+    }
+  });
+
+  function showLoading() {
+    resultsSection.classList.add("hidden");
+    noResultsSection.classList.add("hidden");
+    loadingSection.classList.remove("hidden");
+    asteroidContainer.innerHTML = "";
+  }
+
+  function showNoResults() {
+    loadingSection.classList.add("hidden");
+    resultsSection.classList.add("hidden");
+    noResultsSection.classList.remove("hidden");
+  }
+
+  function getNextApproach(asteroid) {
+    const today = new Date();
+    const futureApproaches = asteroid.close_approach_data?.filter(approach =>
+      new Date(approach.close_approach_date) >= today
+    );
+    
+    if (!futureApproaches || futureApproaches.length === 0) {
+      return null;
+    }
+    
+    futureApproaches.sort((a, b) => 
+      new Date(a.close_approach_date) - new Date(b.close_approach_date)
+    );
+    
+    return futureApproaches[0];
+  }
+
+  function formatDistance(kilometers) {
+    const km = parseFloat(kilometers);
+    if (km >= 1000000) {
+      return (km / 1000000).toFixed(1) + ' million km';
+    } else if (km >= 1000) {
+      return (km / 1000).toFixed(0) + ' thousand km';
+    } else {
+      return km.toFixed(0) + ' km';
+    }
+  }
+
+  function formatSpeed(kmh) {
+    const speed = parseFloat(kmh);
+    return speed.toLocaleString() + ' km/h';
+  }
+
+  function formatDate(dateStr) {
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'long', 
+      day: 'numeric' 
+    });
+  }
+
+  function getSizeDescription(diameter) {
+    const size = parseFloat(diameter);
+    if (size < 0.1) return { desc: "About the size of a house", icon: "🏠", color: "text-green-400" };
+    if (size < 0.5) return { desc: "About the size of a city block", icon: "🏢", color: "text-blue-400" };
+    if (size < 1) return { desc: "About the size of a football stadium", icon: "🏟️", color: "text-yellow-400" };
+    if (size < 5) return { desc: "About the size of a small city", icon: "🏘️", color: "text-orange-400" };
+    if (size < 20) return { desc: "About the size of a large city", icon: "🏙️", color: "text-red-400" };
+    return { desc: "Absolutely massive!", icon: "🌆", color: "text-purple-400" };
+  }
+
+  function getSpeedComparison(speed) {
+    const kmh = parseFloat(speed);
+    if (kmh < 20000) return "🚗 About 550x faster than highway speed";
+    if (kmh < 50000) return "✈️ About 50x faster than a jet plane";
+    if (kmh < 100000) return "🚀 About 3x faster than a rocket";
+    return "⚡ Incredibly fast - faster than most rockets!";
+  }
+
+  function displayAsteroids(asteroids, isUpcoming = false) {
+    loadingSection.classList.add("hidden");
+
+    if (!asteroids || asteroids.length === 0) {
+      return showNoResults();
+    }
+
+    let validAsteroids = asteroids;
+
+    if (isUpcoming) {
+      validAsteroids = asteroids.filter(asteroid => getNextApproach(asteroid) !== null);
+      
+      if (validAsteroids.length === 0) {
+        return showNoResults();
+      }
+    }
+
+    asteroidCount.textContent = `Total Asteroids: ${validAsteroids.length}`;
+    resultsSection.classList.remove("hidden");
+    asteroidContainer.innerHTML = "";
+
+    validAsteroids.forEach((asteroid) => {
+      const name = asteroid.name.replace(/[()]/g, '').trim();
+      const hazard = asteroid.is_potentially_hazardous_asteroid;
+      const diameter = asteroid.estimated_diameter.kilometers.estimated_diameter_max.toFixed(2);
+      const sizeInfo = getSizeDescription(diameter);
+      
+      let approachData;
+      
+      if (isUpcoming) {
+        approachData = getNextApproach(asteroid);
+        if (!approachData) return;
+      } else {
+        approachData = asteroid.close_approach_data[0];
+      }
+      
+      const speedStr = approachData?.relative_velocity?.kilometers_per_hour;
+      const speed = speedStr ? speedStr : 'N/A';
+      const date = approachData?.close_approach_date || 'N/A';
+      const distance = approachData?.miss_distance?.kilometers || 'N/A';
+
+      const card = document.createElement("div");
+      card.className = `bg-gradient-to-br from-slate-800/50 to-slate-900/50 backdrop-blur-sm p-6 rounded-2xl border-2 ${hazard ? 'border-yellow-500/40 shadow-yellow-500/20' : 'border-sky-500/30 shadow-sky-500/20'} shadow-xl hover:shadow-2xl hover:scale-105 transition-all duration-300`;
+
+      card.innerHTML = `
+        <!-- Header -->
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-xl font-bold text-sky-300 truncate mr-2">🌌 ${name}</h3>
+          <div class="flex items-center gap-2">
+            ${hazard ? 
+              '<span class="bg-yellow-500/20 text-yellow-400 px-2 py-1 rounded-full text-xs font-semibold border border-yellow-500/30">⚠️ Watch</span>' : 
+              '<span class="bg-green-500/20 text-green-400 px-2 py-1 rounded-full text-xs font-semibold border border-green-500/30">✅ Safe</span>'
+            }
+          </div>
+        </div>
+
+        <!-- Visual Size Indicator -->
+        <div class="bg-black/30 rounded-xl p-4 mb-4 text-center">
+          <div class="text-3xl mb-2">${sizeInfo.icon}</div>
+          <div class="text-sm ${sizeInfo.color} font-semibold">${sizeInfo.desc}</div>
+          <div class="text-xs text-gray-400 mt-1">${diameter} km across</div>
+        </div>
+
+        <!-- Stats Grid -->
+        <div class="grid grid-cols-1 gap-3">
+          <!-- Speed -->
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-lg">🏃‍♂️</span>
+              <span class="text-sm font-semibold text-gray-300">Speed</span>
+            </div>
+            <div class="text-white font-bold">${speed !== 'N/A' ? formatSpeed(speed) : speed}</div>
+            ${speed !== 'N/A' ? `<div class="text-xs text-gray-400 mt-1">${getSpeedComparison(speed)}</div>` : ''}
+          </div>
+
+          <!-- Distance -->
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-lg">📏</span>
+              <span class="text-sm font-semibold text-gray-300">Distance from Earth</span>
+            </div>
+            <div class="text-white font-bold">${distance !== 'N/A' ? formatDistance(distance) : distance}</div>
+            <div class="text-xs text-gray-400 mt-1">That's ${distance !== 'N/A' ? (parseFloat(distance) / 384400).toFixed(1) + 'x the distance to the Moon' : 'very far away!'}</div>
+          </div>
+
+          <!-- Date -->
+          <div class="bg-white/5 rounded-lg p-3">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-lg">📅</span>
+              <span class="text-sm font-semibold text-gray-300">${isUpcoming ? 'Next Approach' : 'Approach Date'}</span>
+            </div>
+            <div class="text-white font-bold">${date !== 'N/A' ? formatDate(date) : date}</div>
+            ${isUpcoming && date !== 'N/A' ? 
+              `<div class="text-xs text-sky-400 mt-1">Coming up in ${Math.ceil((new Date(date) - new Date()) / (1000 * 60 * 60 * 24))} days</div>` : 
+              ''
+            }
+          </div>
+        </div>
+
+        <!-- Safety Note -->
+        <div class="mt-4 bg-sky-500/10 border border-sky-500/20 rounded-lg p-3">
+          <div class="text-xs text-sky-300 text-center">
+            ${hazard ? 
+              '⚠️ This asteroid is being monitored by NASA but poses no immediate threat' : 
+              '✨ This space rock will pass by safely - no worries!'
+            }
+          </div>
+        </div>
+      `;
+      
+      asteroidContainer.appendChild(card);
+    });
+  }
+</script>
+
+    <style>
+      .search-type-btn.active {
+        background: linear-gradient(to right, rgb(56, 189, 248), rgb(14, 165, 233));
+        color: white;
+      }
+      
+      #date-search.active, #upcoming-search.active {
+        display: flex;
+      }
+      
+      .search-type-btn.active:first-child + .search-type-btn.active ~ #date-search {
+        display: flex;
+      }
+    </style>
+  </body>
+</html>
